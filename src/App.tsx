@@ -1,122 +1,166 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState } from "react";
+import PaymentActivationPage from "./Pages/PaymentActivationPage";
 
-function App() {
-  const [count, setCount] = useState(0)
+type Landing = "team" | "client";
+
+const focusClass =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245f49]";
+
+const inputClass = `min-h-[46px] w-full rounded-[7px] border border-[#cbd6cc] bg-white py-2.5 pl-3.5 text-base placeholder:text-[#5f6b63] ${focusClass}`;
+
+export default function App() {
+  const [showPassword, setShowPassword] = useState(false);
+  const [landing, setLanding] = useState<Landing | null>(null);
+
+  if (landing === "client") {
+    return <PaymentActivationPage sandbox />;
+  }
+
+  if (landing === "team") {
+    return (
+      <main className="min-h-screen bg-[#f4f6f2] px-6 py-10 text-[#21342c]">
+        <div className="mx-auto max-w-[395px]">
+          <section className="rounded-xl border border-[#dce3dc] bg-white p-6">
+            <h1 className="text-2xl font-semibold">Weft internal workspace</h1>
+            <p className="mt-2 text-sm text-[#5f6b63]">
+              The internal workspace is still being designed.
+            </p>
+          </section>
+
+          <button
+            type="button"
+            onClick={() => setLanding(null)}
+            className={`mt-4 min-h-[44px] rounded text-sm font-semibold text-[#245f49] hover:underline ${focusClass}`}
+          >
+            Back to sign in
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+    <div className="flex min-h-screen flex-col bg-[#f4f6f2] text-[#21342c]">
+      <header className="px-6 py-6 sm:px-10">
+        <span className="inline-flex items-center gap-1.5 text-[37px] font-bold leading-none tracking-[-0.07em] text-[#245f49]">
+          <svg
+            aria-hidden="true"
+            className="h-[30px] w-[30px] -rotate-[25deg]"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.25"
+            strokeLinecap="round"
+          >
+            <path d="M3 7q4-4 8 0t10 0M3 12q4-4 8 0t10 0M3 17q4-4 8 0t10 0" />
+          </svg>
+          weft
+        </span>
+      </header>
+
+      <main className="grid flex-1 place-items-center px-4 pb-16 pt-8 sm:pb-24">
+        <section
+          aria-labelledby="login-heading"
+          className="w-full max-w-[395px] rounded-[14px] border border-[#dce3dc] bg-white px-5 pb-6 pt-7 sm:px-7"
         >
-          Count is {count}
-        </button>
-      </section>
+          <h1
+            id="login-heading"
+            className="text-[28px] font-bold leading-tight tracking-[-0.04em]"
+          >
+            Sign in to Weft
+          </h1>
+          <p className="mt-2 text-[15px] text-[#5f6b63]">
+            Access your workspace.
+          </p>
 
-      <div className="ticks"></div>
+          <form
+            className="mt-7"
+            aria-describedby="preview-note"
+            onSubmit={(event) => {
+              event.preventDefault();
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+              const email = new FormData(event.currentTarget).get("email");
+              if (typeof email !== "string") return;
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+              const domain = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
+
+              setShowPassword(false);
+              setLanding(domain === "weft.cash" ? "team" : "client");
+            }}
+          >
+            <label htmlFor="work-email" className="mb-2 block text-sm font-semibold">
+              Work email
+            </label>
+            <input
+              id="work-email"
+              name="email"
+              type="email"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="you@company.com"
+              required
+              className={`${inputClass} pr-3.5`}
+            />
+
+            <label htmlFor="password" className="mb-2 mt-4 block text-sm font-semibold">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="off"
+                placeholder="Enter your password"
+                required
+                className={`${inputClass} pr-12`}
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-controls="password"
+                onClick={() => setShowPassword((visible) => !visible)}
+                className={`absolute inset-y-px right-px grid w-11 place-items-center rounded-md text-[#5f6b63] hover:bg-[#f4f6f2] ${focusClass}`}
+              >
+                <svg
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="2.5" />
+                  {showPassword && <path d="m4 4 16 16" />}
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className={`min-h-[44px] rounded text-sm font-semibold text-[#245f49] hover:underline ${focusClass}`}
+              >
+                Forgot password?
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              className={`min-h-[44px] w-full rounded-[7px] bg-[#245f49] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#173f32] ${focusClass}`}
+            >
+              Sign in
+            </button>
+
+            <p id="preview-note" className="mt-3 text-center text-xs text-[#5f6b63]">
+              Demo preview. Use sample details.
+            </p>
+          </form>
+        </section>
+      </main>
+    </div>
+  );
 }
-
-export default App
