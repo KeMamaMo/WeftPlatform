@@ -15,8 +15,13 @@ type PasswordResetStatus = "idle" | "sending" | "sent" | "error";
 type Landing = "team" | "client";
 type ProductStatus = "not_started" | "in_progress" | "submitted";
 
-const initialCreditStatus: ProductStatus = "not_started";
-const initialPaymentsStatus: ProductStatus = "in_progress";
+type Product = "credit" | "payments";
+type ProductStatuses = Record<Product, ProductStatus>;
+
+const initialStatuses: ProductStatuses = {
+  credit: "not_started",
+  payments: "not_started",
+};
 
 const focusClass =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245f49]";
@@ -24,13 +29,35 @@ const focusClass =
 const inputClass = `min-h-[46px] w-full rounded-[7px] border border-[#cbd6cc] bg-white py-2.5 pl-3.5 text-base placeholder:text-[#5f6b63] ${focusClass}`;
 
 const demoWorkspace = {
+  id: "sample-company",
   name: "Sample Company",
 };
+
+function onboardingStorageKey(uid: string) {
+  return `weft-demo-client-onboarding-${demoWorkspace.id}-${uid}`;
+}
+
+function readProductStatuses(uid: string): ProductStatuses {
+  try {
+    const saved = JSON.parse(localStorage.getItem(onboardingStorageKey(uid)) ?? "{}");
+    const readStatus = (product: Product): ProductStatus => {
+      const status: unknown = saved?.[product];
+      return status === "not_started" || status === "in_progress" || status === "submitted"
+        ? status
+        : initialStatuses[product];
+    };
+
+    return { credit: readStatus("credit"), payments: readStatus("payments") };
+  } catch {
+    return initialStatuses;
+  }
+}
 
 export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [landing, setLanding] = useState<Landing | null>(null);
   const [showClientSetup, setShowClientSetup] = useState(false);
+  const [showPaymentsSetup, setShowPaymentsSetup] = useState(false);
   const [signInError, setSignInError] = useState("");
   const [signOutError, setSignOutError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -41,10 +68,10 @@ export default function App() {
   const [resetStatus, setResetStatus] = useState<PasswordResetStatus>("idle");
   const emailInputRef = useRef<HTMLInputElement>(null);
 
-  const [creditStatus, setCreditStatus] =
-    useState<ProductStatus>(initialCreditStatus);
-  const [paymentsStatus, setPaymentsStatus] =
-    useState<ProductStatus>(initialPaymentsStatus);
+  const [clientOnboarding, setClientOnboarding] = useState<{
+    uid: string;
+    statuses: ProductStatuses;
+  } | null>(null);
 
   useEffect(() => {
     let authRevision = 0;
@@ -57,8 +84,8 @@ export default function App() {
       setResetStatus("idle");
       setShowClientSetup(false);
       setSignOutError("");
-      setCreditStatus(initialCreditStatus);
-      setPaymentsStatus(initialPaymentsStatus);
+      setShowPaymentsSetup(false);
+      setClientOnboarding(null);
 
       if (!user) {
         setIsCheckingSession(false);
@@ -100,8 +127,12 @@ export default function App() {
         return;
       }
 
+      if (role === "client") {
+        setClientOnboarding({ uid: user.uid, statuses: readProductStatuses(user.uid) });
+        setShowClientSetup(true);
+      }
+
       setSignInError("");
-      setShowClientSetup(true);
       setLanding(role);
       setIsCheckingSession(false);
       setIsSigningIn(false);
@@ -112,6 +143,30 @@ export default function App() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!clientOnboarding || auth.currentUser?.uid !== clientOnboarding.uid) return;
+
+    try {
+      localStorage.setItem(
+        onboardingStorageKey(clientOnboarding.uid),
+        JSON.stringify(clientOnboarding.statuses)
+      );
+    } catch {
+      // Keep demo progress usable in memory when browser storage is unavailable.
+    }
+  }, [clientOnboarding]);
+
+  function startProduct(product: Product) {
+    setClientOnboarding((current) => {
+      if (!current || current.statuses[product] !== "not_started") return current;
+
+      return {
+        ...current,
+        statuses: { ...current.statuses, [product]: "in_progress" },
+      };
+    });
+  }
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -188,16 +243,72 @@ export default function App() {
     );
   }
 
-  if (landing === "client" && showClientSetup) {
+  if (landing === "client" && clientOnboarding && showPaymentsSetup) {
+    const paymentsStarted = clientOnboarding.statuses.payments === "in_progress";
+
+    return (
+      <main className="min-h-screen bg-[#f4f6f2] p-6 text-[#21342c]">
+        <div className="mx-auto max-w-2xl rounded-xl border border-[#dce3dc] bg-white p-8">
+          <h1 className="text-3xl font-bold">Set up Payments</h1>
+
+          <p className="mt-3 text-[#5f6b63]">
+            {paymentsStarted
+              ? "Your Payments setup is in progress."
+              : "Start your Payments onboarding when you are ready."}
+          </p>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setShowPaymentsSetup(false)}
+              className={`min-h-[44px] rounded-lg border border-[#dce3dc] px-5 py-3 ${focusClass}`}
+            >
+              Back
+            </button>
+
+            {!paymentsStarted && (
+              <button
+                type="button"
+                onClick={() => {
+                  startProduct("payments");
+                  setShowPaymentsSetup(false);
+                }}
+                className={`min-h-[44px] rounded-lg bg-[#245f49] px-5 py-3 font-semibold text-white ${focusClass}`}
+              >
+                Start Payments onboarding
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+              className={`min-h-[44px] rounded px-2 text-sm font-semibold text-[#245f49] hover:underline disabled:opacity-60 ${focusClass}`}
+            >
+              {isSigningOut ? "Signing out…" : "Sign out"}
+            </button>
+          </div>
+
+          {signOutError && (
+            <p role="alert" className="mt-2 text-sm text-red-700">
+              {signOutError}
+            </p>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  if (landing === "client" && clientOnboarding && showClientSetup) {
     return (
       <ClientSetupPage
         workspaceName={demoWorkspace.name}
-        creditStatus={creditStatus}
-        paymentsStatus={paymentsStatus}
-        onStartCredit={() => setCreditStatus("in_progress")}
-        onStartPayments={() => setPaymentsStatus("in_progress")}
-        onResumeCredit={() => setCreditStatus("in_progress")}
-        onResumePayments={() => setPaymentsStatus("in_progress")}
+        creditStatus={clientOnboarding.statuses.credit}
+        paymentsStatus={clientOnboarding.statuses.payments}
+        onStartCredit={() => startProduct("credit")}
+        onStartPayments={() => setShowPaymentsSetup(true)}
+        onResumeCredit={() => startProduct("credit")}
+        onResumePayments={() => setShowPaymentsSetup(true)}
         onViewCredit={() => alert("Credit submission")}
         onViewPayments={() => alert("Payments submission")}
         onSignOut={handleSignOut}
