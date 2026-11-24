@@ -1,9 +1,15 @@
 interface ClientLandingPageProps {
   onOpenSetup: () => void;
+  onSignOut: () => Promise<void>;
+  isSigningOut: boolean;
+  signOutError: string;
 }
 
 export default function ClientLandingPage({
   onOpenSetup,
+  onSignOut,
+  isSigningOut,
+  signOutError,
 }: ClientLandingPageProps) {
   return (
     <main className="grid min-h-screen place-items-center bg-[#f4f6f2] px-4 py-10 text-[#21342c]">
@@ -26,6 +32,21 @@ export default function ClientLandingPage({
         >
           Set up your platform
         </button>
+
+        <button
+          type="button"
+          onClick={onSignOut}
+          disabled={isSigningOut}
+          className="mt-2 min-h-[44px] w-full rounded text-sm font-semibold text-[#245f49] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245f49] disabled:opacity-60"
+        >
+          {isSigningOut ? "Signing out…" : "Sign out"}
+        </button>
+
+        {signOutError && (
+          <p role="alert" className="mt-2 text-sm text-red-700">
+            {signOutError}
+          </p>
+        )}
       </section>
     </main>
   );

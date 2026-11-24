@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { FirebaseError } from "firebase/app";
 import {
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
@@ -9,8 +11,12 @@ import { auth } from "./firebase";
 import ClientSetupPage from "./Pages/ClientSetupPage";
 import ClientLandingPage from "./Pages/ClientLandingPage";
 
+type PasswordResetStatus = "idle" | "sending" | "sent" | "error";
 type Landing = "team" | "client";
 type ProductStatus = "not_started" | "in_progress" | "submitted";
+
+const initialCreditStatus: ProductStatus = "not_started";
+const initialPaymentsStatus: ProductStatus = "in_progress";
 
 const focusClass =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245f49]";
@@ -28,12 +34,17 @@ export default function App() {
   const [signInError, setSignInError] = useState("");
   const [signOutError, setSignOutError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
 
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [resetStatus, setResetStatus] = useState<PasswordResetStatus>("idle");
+  const emailInputRef = useRef<HTMLInputElement>(null);
+
   const [creditStatus, setCreditStatus] =
-    useState<ProductStatus>("not_started");
+    useState<ProductStatus>(initialCreditStatus);
   const [paymentsStatus, setPaymentsStatus] =
-    useState<ProductStatus>("in_progress");
+    useState<ProductStatus>(initialPaymentsStatus);
 
   useEffect(() => {
     let authRevision = 0;
@@ -41,6 +52,13 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       const revision = ++authRevision;
       setLanding(null);
+      setShowPassword(false);
+      setShowPasswordReset(false);
+      setResetStatus("idle");
+      setShowClientSetup(false);
+      setSignOutError("");
+      setCreditStatus(initialCreditStatus);
+      setPaymentsStatus(initialPaymentsStatus);
 
       if (!user) {
         setIsCheckingSession(false);
@@ -83,7 +101,6 @@ export default function App() {
       }
 
       setSignInError("");
-      setShowPassword(false);
       setShowClientSetup(true);
       setLanding(role);
       setIsCheckingSession(false);
@@ -118,13 +135,48 @@ export default function App() {
     }
   }
 
+  function switchAuthForm(showReset: boolean) {
+    setSignInError("");
+    setShowPassword(false);
+    setResetStatus("idle");
+    setShowPasswordReset(showReset);
+    emailInputRef.current?.focus();
+  }
+
+  async function handlePasswordReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (resetStatus === "sending") return;
+
+    const fields = new FormData(event.currentTarget);
+    const email = String(fields.get("email") ?? "").trim();
+
+    setResetStatus("sending");
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetStatus("sent");
+    } catch (error) {
+      const hideAccountStatus =
+        error instanceof FirebaseError &&
+        (error.code === "auth/user-not-found" ||
+          error.code === "auth/user-disabled");
+
+      setResetStatus(hideAccountStatus ? "sent" : "error");
+    }
+  }
+
   async function handleSignOut() {
+    if (isSigningOut) return;
+
     setSignOutError("");
+    setIsSigningOut(true);
 
     try {
       await signOut(auth);
     } catch {
       setSignOutError("We couldn’t sign you out. Please try again.");
+    } finally {
+      setIsSigningOut(false);
     }
   }
 
@@ -148,12 +200,22 @@ export default function App() {
         onResumePayments={() => setPaymentsStatus("in_progress")}
         onViewCredit={() => alert("Credit submission")}
         onViewPayments={() => alert("Payments submission")}
+        onSignOut={handleSignOut}
+        isSigningOut={isSigningOut}
+        signOutError={signOutError}
       />
     );
   }
 
   if (landing === "client") {
-    return <ClientLandingPage onOpenSetup={() => setShowClientSetup(true)} />;
+    return (
+      <ClientLandingPage
+        onOpenSetup={() => setShowClientSetup(true)}
+        onSignOut={handleSignOut}
+        isSigningOut={isSigningOut}
+        signOutError={signOutError}
+      />
+    );
   }
 
   if (landing === "team") {
@@ -170,9 +232,10 @@ export default function App() {
           <button
             type="button"
             onClick={handleSignOut}
-            className={`mt-4 min-h-[44px] rounded text-sm font-semibold text-[#245f49] hover:underline ${focusClass}`}
+            disabled={isSigningOut}
+            className={`mt-4 min-h-[44px] rounded text-sm font-semibold text-[#245f49] hover:underline disabled:opacity-60 ${focusClass}`}
           >
-            Sign out
+            {isSigningOut ? "Signing out…" : "Sign out"}
           </button>
 
           {signOutError && (
@@ -213,17 +276,24 @@ export default function App() {
             id="login-heading"
             className="text-[28px] font-bold leading-tight tracking-[-0.04em]"
           >
-            Sign in to Weft
+            {showPasswordReset ? "Reset your password" : "Sign in to Weft"}
           </h1>
           <p className="mt-2 text-[15px] text-[#5f6b63]">
-            Access your workspace.
+            {showPasswordReset
+              ? "Enter your work email to request a reset link."
+              : "Access your workspace."}
           </p>
 
-          <form className="mt-7" onSubmit={handleSignIn} aria-busy={isSigningIn}>
+          <form
+            className="mt-7"
+            onSubmit={showPasswordReset ? handlePasswordReset : handleSignIn}
+            aria-busy={showPasswordReset ? resetStatus === "sending" : isSigningIn}
+          >
             <label htmlFor="work-email" className="mb-2 block text-sm font-semibold">
               Work email
             </label>
             <input
+              ref={emailInputRef}
               id="work-email"
               name="email"
               type="email"
@@ -232,69 +302,113 @@ export default function App() {
               spellCheck={false}
               placeholder="you@company.com"
               required
+              readOnly={showPasswordReset && resetStatus === "sending"}
+              onChange={() => {
+                if (showPasswordReset) setResetStatus("idle");
+              }}
               className={`${inputClass} pr-3.5`}
             />
 
-            <label htmlFor="password" className="mb-2 mt-4 block text-sm font-semibold">
-              Password
-            </label>
-            <div className="relative">
-              <input
-                id="password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                required
-                className={`${inputClass} pr-12`}
-              />
-              <button
-                type="button"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                aria-controls="password"
-                onClick={() => setShowPassword((visible) => !visible)}
-                className={`absolute inset-y-px right-px grid w-11 place-items-center rounded-md text-[#5f6b63] hover:bg-[#f4f6f2] ${focusClass}`}
-              >
-                <svg
-                  aria-hidden="true"
-                  className="h-5 w-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+            {showPasswordReset ? (
+              <>
+                <button
+                  type="submit"
+                  disabled={resetStatus === "sending"}
+                  className={`mt-4 min-h-[44px] w-full rounded-[7px] bg-[#245f49] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#173f32] disabled:opacity-60 ${focusClass}`}
                 >
-                  <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12Z" />
-                  <circle cx="12" cy="12" r="2.5" />
-                  {showPassword && <path d="m4 4 16 16" />}
-                </svg>
-              </button>
-            </div>
+                  {resetStatus === "sending" ? "Sending reset link…" : "Send reset link"}
+                </button>
+                <button
+                  type="button"
+                  disabled={resetStatus === "sending"}
+                  onClick={() => switchAuthForm(false)}
+                  className={`mt-2 min-h-[44px] w-full rounded text-sm font-semibold text-[#245f49] hover:underline disabled:opacity-60 ${focusClass}`}
+                >
+                  Back to sign in
+                </button>
+              </>
+            ) : (
+              <>
+                <label htmlFor="password" className="mb-2 mt-4 block text-sm font-semibold">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    required
+                    className={`${inputClass} pr-12`}
+                  />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-controls="password"
+                    onClick={() => setShowPassword((visible) => !visible)}
+                    className={`absolute inset-y-px right-px grid w-11 place-items-center rounded-md text-[#5f6b63] hover:bg-[#f4f6f2] ${focusClass}`}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      className="h-5 w-5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12Z" />
+                      <circle cx="12" cy="12" r="2.5" />
+                      {showPassword && <path d="m4 4 16 16" />}
+                    </svg>
+                  </button>
+                </div>
 
-            <div className="flex justify-end">
-              <button
-                type="button"
-                className={`min-h-[44px] rounded text-sm font-semibold text-[#245f49] hover:underline ${focusClass}`}
-              >
-                Forgot password?
-              </button>
-            </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => switchAuthForm(true)}
+                    disabled={isSigningIn}
+                    className={`min-h-[44px] rounded text-sm font-semibold text-[#245f49] hover:underline disabled:opacity-60 ${focusClass}`}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
 
-            <button
-              type="submit"
-              disabled={isSigningIn}
-              className={`min-h-[44px] w-full rounded-[7px] bg-[#245f49] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#173f32] disabled:opacity-60 ${focusClass}`}
-            >
-              {isSigningIn ? "Signing in…" : "Sign in"}
-            </button>
+                <button
+                  type="submit"
+                  disabled={isSigningIn}
+                  className={`min-h-[44px] w-full rounded-[7px] bg-[#245f49] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#173f32] disabled:opacity-60 ${focusClass}`}
+                >
+                  {isSigningIn ? "Signing in…" : "Sign in"}
+                </button>
 
-            {signInError && (
-              <p role="alert" className="mt-3 text-sm text-red-700">
-                {signInError}
-              </p>
+                {signInError && (
+                  <p role="alert" className="mt-3 text-sm text-red-700">
+                    {signInError}
+                  </p>
+                )}
+              </>
             )}
           </form>
+
+          {showPasswordReset && (
+            <>
+              <p role="status" className="empty:sr-only mt-3 text-sm text-[#245f49]">
+                {resetStatus === "sending" && "Sending your request…"}
+                {resetStatus === "sent" &&
+                  "If an account exists for this email, you’ll receive a password reset link."}
+              </p>
+
+              {resetStatus === "error" && (
+                <p role="alert" className="mt-3 text-sm text-red-700">
+                  We couldn’t send your request. Please try again.
+                </p>
+              )}
+            </>
+          )}
         </section>
       </main>
     </div>
