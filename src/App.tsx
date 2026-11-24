@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 import { auth } from "./firebase";
 import ClientSetupPage from "./Pages/ClientSetupPage";
 import ClientLandingPage from "./Pages/ClientLandingPage";
@@ -24,11 +28,73 @@ export default function App() {
   const [signInError, setSignInError] = useState("");
   const [signOutError, setSignOutError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
   const [creditStatus, setCreditStatus] =
     useState<ProductStatus>("not_started");
   const [paymentsStatus, setPaymentsStatus] =
     useState<ProductStatus>("in_progress");
+
+  useEffect(() => {
+    let authRevision = 0;
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      const revision = ++authRevision;
+      setLanding(null);
+
+      if (!user) {
+        setIsCheckingSession(false);
+        setIsSigningIn(false);
+        return;
+      }
+
+      setIsCheckingSession(true);
+
+      const isCurrentSession = () =>
+        revision === authRevision && auth.currentUser === user;
+
+      let role: unknown;
+      let accessError =
+        "Your account does not have access to a Weft workspace yet.";
+
+      try {
+        const { claims } = await user.getIdTokenResult();
+        role = claims.weftRole;
+      } catch {
+        accessError =
+          "We couldn’t verify your workspace access. Please sign in again.";
+      }
+
+      if (!isCurrentSession()) return;
+
+      if (role !== "team" && role !== "client") {
+        setSignInError(accessError);
+
+        try {
+          await signOut(auth);
+        } catch {
+          if (revision === authRevision) {
+            setIsCheckingSession(false);
+            setIsSigningIn(false);
+          }
+        }
+
+        return;
+      }
+
+      setSignInError("");
+      setShowPassword(false);
+      setShowClientSetup(true);
+      setLanding(role);
+      setIsCheckingSession(false);
+      setIsSigningIn(false);
+    });
+
+    return () => {
+      authRevision += 1;
+      unsubscribe();
+    };
+  }, []);
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,24 +108,12 @@ export default function App() {
     setIsSigningIn(true);
 
     try {
-      const { user } = await signInWithEmailAndPassword(auth, email, password);
-      const { claims } = await user.getIdTokenResult();
-      const role = claims.weftRole;
-
-      if (role !== "team" && role !== "client") {
-        await signOut(auth);
-        setSignInError("Your account does not have access to a Weft workspace yet.");
-        return;
-      }
-
-      setShowPassword(false);
-      setShowClientSetup(true);
-      setLanding(role);
+      // The same observer handles a fresh sign-in and a restored session.
+      await signInWithEmailAndPassword(auth, email, password);
     } catch {
       setSignInError(
         "We couldn’t sign you in. Check your email and password and try again."
       );
-    } finally {
       setIsSigningIn(false);
     }
   }
@@ -69,10 +123,17 @@ export default function App() {
 
     try {
       await signOut(auth);
-      setLanding(null);
     } catch {
       setSignOutError("We couldn’t sign you out. Please try again.");
     }
+  }
+
+  if (isCheckingSession) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#f4f6f2] px-4 text-[#21342c]">
+        <p role="status">Checking your Weft session…</p>
+      </main>
+    );
   }
 
   if (landing === "client" && showClientSetup) {
