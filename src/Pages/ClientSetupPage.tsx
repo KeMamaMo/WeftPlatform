@@ -1,9 +1,12 @@
+import { PaymentsStatusLabel } from "./PaymentsSetupPage";
+import type { PaymentsStatus } from "./PaymentsSetupPage";
+
 type ProductStatus = "not_started" | "in_progress" | "submitted";
 
 interface ClientSetupPageProps {
   workspaceName: string;
   creditStatus: ProductStatus;
-  paymentsStatus: ProductStatus;
+  paymentsStatus: PaymentsStatus;
   onStartCredit: () => void;
   onStartPayments: () => void;
   onResumeCredit: () => void;
@@ -20,19 +23,23 @@ function ProductCard({
   description,
   status,
   onClick,
+  isPayments = false,
 }: {
   title: string;
   description: string;
-  status: ProductStatus;
+  status: PaymentsStatus;
   onClick: () => void;
+  isPayments?: boolean;
 }) {
+  const paymentAction = status === "not_started" ? "Set up payments" : "View payments";
+
   return (
     <section className="rounded-xl border border-[#dce3dc] bg-white p-6">
       <h2 className="text-xl font-semibold">{title}</h2>
       <p className="mt-2 text-sm text-[#5f6b63]">{description}</p>
 
       <p className="mt-5 text-sm text-[#5f6b63]">
-        Status: {status.replace("_", " ")}
+        Status: {isPayments ? <PaymentsStatusLabel status={status} /> : status.replace("_", " ")}
       </p>
 
       <button
@@ -40,11 +47,13 @@ function ProductCard({
         onClick={onClick}
         className="mt-4 min-h-[44px] rounded-lg bg-[#245f49] px-5 py-2 text-sm font-semibold text-white hover:bg-[#173f32] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245f49]"
       >
-        {status === "not_started"
-          ? "Get started"
-          : status === "in_progress"
-            ? "Continue setup"
-            : "View submission"}
+        {isPayments
+          ? paymentAction
+          : status === "not_started"
+            ? "Get started"
+            : status === "in_progress"
+              ? "Continue setup"
+              : "View submission"}
       </button>
     </section>
   );
@@ -117,6 +126,7 @@ export default function ClientSetupPage({
         <div className="mt-10 grid gap-6 md:grid-cols-2">
           <ProductCard
             title="Payments"
+            isPayments
             description="Set up your Payments product and manage your application."
             status={paymentsStatus}
             onClick={
