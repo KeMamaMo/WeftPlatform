@@ -1,3 +1,5 @@
+import { QRCodeSVG } from "qrcode.react";
+
 export type PaymentsStatus = "not_started" | "in_progress" | "submitted" | "active";
 
 export type PaymentsWorkspace = {
@@ -17,10 +19,7 @@ type PaymentsSetupPageProps = WorkspaceHeaderProps & {
   status: PaymentsStatus;
   allProductsHref: string;
   continueHref: string;
-  demoMode?: boolean;
-  onWhatsAppPreview?: () => void;
-  whatsAppPreviewOpen?: boolean;
-  whatsApp?: { href: string; qrImageSrc?: string };
+  whatsAppHref: string;
   hasReusableCreditDocuments?: boolean;
 };
 
@@ -107,56 +106,18 @@ export function PaymentsWorkspaceHeader({
   );
 }
 
-// The wireframe uses a decorative pattern for the demo QR.
-const previewQrCorners = [[1, 1], [14, 1], [1, 14]];
-const previewQrCells = Array.from({ length: 21 * 21 }, (_, index) => ({
-  x: index % 21,
-  y: Math.floor(index / 21),
-})).filter(({ x, y }) => {
-  const isInPatternArea =
-    (x > 9 && y > 9) || (x >= 9 && x <= 12) || (y >= 9 && y <= 12);
-  return isInPatternArea && (x * 19 + y * 17 + x * y * 7) % 11 < 4;
-});
-
-function WhatsAppQr({
-  whatsApp,
-  showPreview,
-}: {
-  whatsApp?: PaymentsSetupPageProps["whatsApp"];
-  showPreview: boolean;
-}) {
-  if (!whatsApp?.qrImageSrc && !showPreview) return null;
-
-  const qrClass = "mb-[7px] size-[82px] rounded-[7px] border border-[#dce3dc] p-2";
-
+function WhatsAppQr({ href }: { href: string }) {
   return (
     <div className="hidden justify-items-center border-l border-[#dce3dc] pl-4 text-center text-xs leading-[1.35] text-[#5f6b63] min-[721px]:grid">
-      {whatsApp?.qrImageSrc ? (
-        <img
-          src={whatsApp.qrImageSrc}
-          alt="QR code for this Payments setup in WhatsApp"
-          className={`${qrClass} object-contain`}
-        />
-      ) : (
-        <svg
-          aria-hidden="true"
-          viewBox="-.5 -.5 22 22"
-          fill="currentColor"
-          className={qrClass}
-        >
-          {previewQrCells.map(({ x, y }) => (
-            <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" />
-          ))}
-          {previewQrCorners.map(([x, y]) => (
-            <g key={`${x}-${y}`}>
-              <rect x={x} y={y} width="7" height="7" fill="none" stroke="currentColor" />
-              <rect x={x + 2} y={y + 2} width="3" height="3" />
-            </g>
-          ))}
-        </svg>
-      )}
+      <QRCodeSVG
+        value={href}
+        size={104}
+        level="M"
+        marginSize={4}
+        title="QR code to open Weft Payments setup in WhatsApp"
+        className="mb-[7px] rounded-[7px] border border-[#dce3dc] bg-white"
+      />
       <strong className="font-semibold">Scan to open WhatsApp</strong>
-      {showPreview && <span>QR preview only</span>}
     </div>
   );
 }
@@ -167,20 +128,12 @@ export default function PaymentsSetupPage({
   status,
   allProductsHref,
   continueHref,
-  demoMode = false,
-  onWhatsAppPreview,
-  whatsAppPreviewOpen = false,
-  whatsApp,
+  whatsAppHref,
   hasReusableCreditDocuments = false,
   ...headerProps
 }: PaymentsSetupPageProps) {
   const canContinue = status === "not_started" || status === "in_progress";
   const whatsAppLabel = status === "not_started" ? "Start on WhatsApp" : "Continue on WhatsApp";
-  const showWhatsAppPreview = demoMode && !whatsApp;
-  const showQr = showWhatsAppPreview || Boolean(whatsApp?.qrImageSrc);
-  const entryClass = showQr
-    ? "mt-4 grid items-center gap-4 min-[721px]:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]"
-    : "mt-4";
 
   return (
     <div className="min-h-screen bg-[#f4f6f2] text-[#21342c]">
@@ -230,38 +183,17 @@ export default function PaymentsSetupPage({
                   Have ready your company registration document (or NPO registration for nonprofits), directors’ and shareholders’ IDs, proof of address, a recent bank letter, your tax compliance PIN and website.
                   {hasReusableCreditDocuments && " Documents already on file are reused."}
                 </p>
-                <div className={entryClass}>
+                <div className="mt-4 grid items-center gap-4 min-[721px]:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
                   <div className="grid min-w-0 content-start gap-[9px]">
                     <a href={continueHref} className={paymentsPrimaryAction}>
                       Continue here
                     </a>
-                    {whatsApp ? (
-                      <a href={whatsApp.href} className={secondaryAction}>
-                        {whatsAppLabel}
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={showWhatsAppPreview ? onWhatsAppPreview : undefined}
-                        disabled={!showWhatsAppPreview || !onWhatsAppPreview}
-                        className={secondaryAction}
-                      >
-                        {whatsAppLabel}
-                      </button>
-                    )}
+                    <a href={whatsAppHref} className={secondaryAction}>
+                      {whatsAppLabel}
+                    </a>
                   </div>
-                  <WhatsAppQr whatsApp={whatsApp} showPreview={showWhatsAppPreview} />
+                  <WhatsAppQr href={whatsAppHref} />
                 </div>
-                {!whatsApp && !showWhatsAppPreview && (
-                  <p className="mt-2 text-sm text-[#5f6b63]">
-                    WhatsApp setup is currently unavailable.
-                  </p>
-                )}
-                {showWhatsAppPreview && whatsAppPreviewOpen && (
-                  <p role="status" className="mt-3 text-sm text-[#5f6b63]">
-                    This workspace is a preview. Continue here to try Payments onboarding.
-                  </p>
-                )}
               </>
             ) : (
               <p className="mt-3 text-sm text-[#5f6b63]">

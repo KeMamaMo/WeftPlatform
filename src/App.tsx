@@ -13,17 +13,36 @@ import ClientLandingPage from "./Pages/ClientLandingPage";
 import PaymentsSetupPage from "./Pages/PaymentsSetupPage";
 import type { PaymentsStatus, PaymentsWorkspace } from "./Pages/PaymentsSetupPage";
 import PaymentsConsentPreviewPage from "./Pages/PaymentsConsentPreviewPage";
+import CreditSetupPage, { CreditOnboardingPlaceholder } from "./Pages/CreditSetupPage";
+import type { CreditStatus } from "./Pages/CreditSetupPage";
 
 type PasswordResetStatus = "idle" | "sending" | "sent" | "error";
 type Landing = "team" | "client";
-type ProductStatus = "not_started" | "in_progress" | "submitted";
 
 type Product = "credit" | "payments";
-type ProductStatuses = { credit: ProductStatus; payments: PaymentsStatus };
+type ProductStatuses = { credit: CreditStatus; payments: PaymentsStatus };
 
 const allProductsHref = "#/setup";
 const paymentsSetupHref = "#/payments/setup";
 const paymentsConsentHref = "#/payments/consent";
+const creditSetupHref = "#/credit/setup";
+const creditOnboardingHref = "#/credit/onboarding";
+
+const clientSetupRoutes = [
+  allProductsHref,
+  paymentsSetupHref,
+  paymentsConsentHref,
+  creditSetupHref,
+  creditOnboardingHref,
+];
+
+const weftWhatsAppNumber = "27766795396";
+const paymentsWhatsAppHref = `https://wa.me/${weftWhatsAppNumber}?text=${encodeURIComponent(
+  "Hi Weft, I'd like to set up Payments."
+)}`;
+const creditWhatsAppHref = `https://wa.me/${weftWhatsAppNumber}?text=${encodeURIComponent(
+  "Hi Weft, I'd like to apply for credit."
+)}`;
 
 const initialStatuses: ProductStatuses = {
   credit: "not_started",
@@ -49,7 +68,7 @@ function readProductStatuses(uid: string): ProductStatuses {
   try {
     const saved = JSON.parse(localStorage.getItem(onboardingStorageKey(uid)) ?? "{}");
 
-    const readStatus = (product: Product): ProductStatus => {
+    const readStatus = (product: Product): CreditStatus => {
       const status: unknown = saved?.[product];
       return status === "not_started" || status === "in_progress" || status === "submitted"
         ? status
@@ -70,7 +89,6 @@ export default function App() {
   const [landing, setLanding] = useState<Landing | null>(null);
   const [showClientSetup, setShowClientSetup] = useState(false);
   const [clientLocation, setClientLocation] = useState(() => window.location.hash);
-  const [whatsAppPreviewOpen, setWhatsAppPreviewOpen] = useState(false);
   const [signInError, setSignInError] = useState("");
   const [signOutError, setSignOutError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -97,7 +115,6 @@ export default function App() {
       setResetStatus("idle");
       setShowClientSetup(false);
       setSignOutError("");
-      setWhatsAppPreviewOpen(false);
       setClientOnboarding(null);
 
       if (!user) {
@@ -163,7 +180,6 @@ export default function App() {
   useEffect(() => {
     function handleLocationChange() {
       setClientLocation(window.location.hash);
-      setWhatsAppPreviewOpen(false);
     }
 
     window.addEventListener("hashchange", handleLocationChange);
@@ -254,7 +270,7 @@ export default function App() {
 
     try {
       await signOut(auth);
-      if ([allProductsHref, paymentsSetupHref, paymentsConsentHref].includes(window.location.hash)) {
+      if (clientSetupRoutes.includes(window.location.hash)) {
         window.history.replaceState(null, "", window.location.pathname + window.location.search);
         setClientLocation("");
       }
@@ -267,6 +283,10 @@ export default function App() {
 
   function openPaymentsSetup() {
     window.location.hash = paymentsSetupHref;
+  }
+
+  function openCreditSetup() {
+    window.location.hash = creditSetupHref;
   }
 
   if (isCheckingSession) {
@@ -306,12 +326,44 @@ export default function App() {
         status={status}
         allProductsHref={allProductsHref}
         continueHref={paymentsConsentHref}
-        demoMode
-        whatsAppPreviewOpen={whatsAppPreviewOpen}
-        onWhatsAppPreview={() => setWhatsAppPreviewOpen(true)}
+        whatsAppHref={paymentsWhatsAppHref}
         onSignOut={handleSignOut}
         isSigningOut={isSigningOut}
         signOutError={signOutError}
+      />
+    );
+  }
+
+  if (
+    landing === "client" &&
+    clientOnboarding &&
+    (clientLocation === creditSetupHref || clientLocation === creditOnboardingHref)
+  ) {
+    const status = clientOnboarding.statuses.credit;
+    const creditWorkspaceProps = {
+      workspaceName: demoWorkspace.name,
+      legalName: demoWorkspace.legalName,
+      onSignOut: handleSignOut,
+      isSigningOut,
+      signOutError,
+    };
+
+    if (clientLocation === creditOnboardingHref && status !== "submitted") {
+      return (
+        <CreditOnboardingPlaceholder
+          {...creditWorkspaceProps}
+          creditSetupHref={creditSetupHref}
+        />
+      );
+    }
+
+    return (
+      <CreditSetupPage
+        {...creditWorkspaceProps}
+        status={status}
+        allProductsHref={allProductsHref}
+        continueHref={creditOnboardingHref}
+        whatsAppHref={creditWhatsAppHref}
       />
     );
   }
@@ -326,11 +378,11 @@ export default function App() {
         workspaceName={demoWorkspace.name}
         creditStatus={clientOnboarding.statuses.credit}
         paymentsStatus={clientOnboarding.statuses.payments}
-        onStartCredit={() => startProduct("credit")}
+        onStartCredit={openCreditSetup}
         onStartPayments={openPaymentsSetup}
-        onResumeCredit={() => startProduct("credit")}
+        onResumeCredit={openCreditSetup}
         onResumePayments={openPaymentsSetup}
-        onViewCredit={() => alert("Credit submission")}
+        onViewCredit={openCreditSetup}
         onViewPayments={openPaymentsSetup}
         onSignOut={handleSignOut}
         isSigningOut={isSigningOut}
