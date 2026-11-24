@@ -10,13 +10,20 @@ import {
 import { auth } from "./firebase";
 import ClientSetupPage from "./Pages/ClientSetupPage";
 import ClientLandingPage from "./Pages/ClientLandingPage";
+import PaymentsSetupPage from "./Pages/PaymentsSetupPage";
+import type { PaymentsStatus, PaymentsWorkspace } from "./Pages/PaymentsSetupPage";
+import PaymentsConsentPreviewPage from "./Pages/PaymentsConsentPreviewPage";
 
 type PasswordResetStatus = "idle" | "sending" | "sent" | "error";
 type Landing = "team" | "client";
 type ProductStatus = "not_started" | "in_progress" | "submitted";
 
 type Product = "credit" | "payments";
-type ProductStatuses = Record<Product, ProductStatus>;
+type ProductStatuses = { credit: ProductStatus; payments: PaymentsStatus };
+
+const allProductsHref = "#/setup";
+const paymentsSetupHref = "#/payments/setup";
+const paymentsConsentHref = "#/payments/consent";
 
 const initialStatuses: ProductStatuses = {
   credit: "not_started",
@@ -28,9 +35,10 @@ const focusClass =
 
 const inputClass = `min-h-[46px] w-full rounded-[7px] border border-[#cbd6cc] bg-white py-2.5 pl-3.5 text-base placeholder:text-[#5f6b63] ${focusClass}`;
 
-const demoWorkspace = {
+const demoWorkspace: PaymentsWorkspace & { id: string } = {
   id: "sample-company",
   name: "Sample Company",
+  legalName: "Sample Company (Pty) Ltd.",
 };
 
 function onboardingStorageKey(uid: string) {
@@ -40,14 +48,18 @@ function onboardingStorageKey(uid: string) {
 function readProductStatuses(uid: string): ProductStatuses {
   try {
     const saved = JSON.parse(localStorage.getItem(onboardingStorageKey(uid)) ?? "{}");
+
     const readStatus = (product: Product): ProductStatus => {
       const status: unknown = saved?.[product];
       return status === "not_started" || status === "in_progress" || status === "submitted"
         ? status
-        : initialStatuses[product];
+        : "not_started";
     };
 
-    return { credit: readStatus("credit"), payments: readStatus("payments") };
+    return {
+      credit: readStatus("credit"),
+      payments: saved?.payments === "active" ? "active" : readStatus("payments"),
+    };
   } catch {
     return initialStatuses;
   }
@@ -57,7 +69,8 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [landing, setLanding] = useState<Landing | null>(null);
   const [showClientSetup, setShowClientSetup] = useState(false);
-  const [showPaymentsSetup, setShowPaymentsSetup] = useState(false);
+  const [clientLocation, setClientLocation] = useState(() => window.location.hash);
+  const [whatsAppPreviewOpen, setWhatsAppPreviewOpen] = useState(false);
   const [signInError, setSignInError] = useState("");
   const [signOutError, setSignOutError] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -84,7 +97,7 @@ export default function App() {
       setResetStatus("idle");
       setShowClientSetup(false);
       setSignOutError("");
-      setShowPaymentsSetup(false);
+      setWhatsAppPreviewOpen(false);
       setClientOnboarding(null);
 
       if (!user) {
@@ -128,7 +141,10 @@ export default function App() {
       }
 
       if (role === "client") {
-        setClientOnboarding({ uid: user.uid, statuses: readProductStatuses(user.uid) });
+        setClientOnboarding({
+          uid: user.uid,
+          statuses: readProductStatuses(user.uid),
+        });
         setShowClientSetup(true);
       }
 
@@ -142,6 +158,16 @@ export default function App() {
       authRevision += 1;
       unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    function handleLocationChange() {
+      setClientLocation(window.location.hash);
+      setWhatsAppPreviewOpen(false);
+    }
+
+    window.addEventListener("hashchange", handleLocationChange);
+    return () => window.removeEventListener("hashchange", handleLocationChange);
   }, []);
 
   useEffect(() => {
@@ -228,11 +254,19 @@ export default function App() {
 
     try {
       await signOut(auth);
+      if ([allProductsHref, paymentsSetupHref, paymentsConsentHref].includes(window.location.hash)) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        setClientLocation("");
+      }
     } catch {
       setSignOutError("We couldn’t sign you out. Please try again.");
     } finally {
       setIsSigningOut(false);
     }
+  }
+
+  function openPaymentsSetup() {
+    window.location.hash = paymentsSetupHref;
   }
 
   if (isCheckingSession) {
@@ -243,74 +277,61 @@ export default function App() {
     );
   }
 
-  if (landing === "client" && clientOnboarding && showPaymentsSetup) {
-    const paymentsStarted = clientOnboarding.statuses.payments === "in_progress";
+  if (
+    landing === "client" &&
+    clientOnboarding &&
+    (clientLocation === paymentsSetupHref || clientLocation === paymentsConsentHref)
+  ) {
+    const status = clientOnboarding.statuses.payments;
+    const canContinue = status === "not_started" || status === "in_progress";
+
+    if (clientLocation === paymentsConsentHref && canContinue) {
+      return (
+        <PaymentsConsentPreviewPage
+          workspace={demoWorkspace}
+          paymentsSetupHref={paymentsSetupHref}
+          hasStarted={status === "in_progress"}
+          onStart={() => startProduct("payments")}
+          onSignOut={handleSignOut}
+          isSigningOut={isSigningOut}
+          signOutError={signOutError}
+        />
+      );
+    }
 
     return (
-      <main className="min-h-screen bg-[#f4f6f2] p-6 text-[#21342c]">
-        <div className="mx-auto max-w-2xl rounded-xl border border-[#dce3dc] bg-white p-8">
-          <h1 className="text-3xl font-bold">Set up Payments</h1>
-
-          <p className="mt-3 text-[#5f6b63]">
-            {paymentsStarted
-              ? "Your Payments setup is in progress."
-              : "Start your Payments onboarding when you are ready."}
-          </p>
-
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => setShowPaymentsSetup(false)}
-              className={`min-h-[44px] rounded-lg border border-[#dce3dc] px-5 py-3 ${focusClass}`}
-            >
-              Back
-            </button>
-
-            {!paymentsStarted && (
-              <button
-                type="button"
-                onClick={() => {
-                  startProduct("payments");
-                  setShowPaymentsSetup(false);
-                }}
-                className={`min-h-[44px] rounded-lg bg-[#245f49] px-5 py-3 font-semibold text-white ${focusClass}`}
-              >
-                Start Payments onboarding
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={handleSignOut}
-              disabled={isSigningOut}
-              className={`min-h-[44px] rounded px-2 text-sm font-semibold text-[#245f49] hover:underline disabled:opacity-60 ${focusClass}`}
-            >
-              {isSigningOut ? "Signing out…" : "Sign out"}
-            </button>
-          </div>
-
-          {signOutError && (
-            <p role="alert" className="mt-2 text-sm text-red-700">
-              {signOutError}
-            </p>
-          )}
-        </div>
-      </main>
+      <PaymentsSetupPage
+        workspaceName={demoWorkspace.name}
+        legalName={demoWorkspace.legalName}
+        status={status}
+        allProductsHref={allProductsHref}
+        continueHref={paymentsConsentHref}
+        demoMode
+        whatsAppPreviewOpen={whatsAppPreviewOpen}
+        onWhatsAppPreview={() => setWhatsAppPreviewOpen(true)}
+        onSignOut={handleSignOut}
+        isSigningOut={isSigningOut}
+        signOutError={signOutError}
+      />
     );
   }
 
-  if (landing === "client" && clientOnboarding && showClientSetup) {
+  if (
+    landing === "client" &&
+    clientOnboarding &&
+    (showClientSetup || clientLocation === allProductsHref)
+  ) {
     return (
       <ClientSetupPage
         workspaceName={demoWorkspace.name}
         creditStatus={clientOnboarding.statuses.credit}
         paymentsStatus={clientOnboarding.statuses.payments}
         onStartCredit={() => startProduct("credit")}
-        onStartPayments={() => setShowPaymentsSetup(true)}
+        onStartPayments={openPaymentsSetup}
         onResumeCredit={() => startProduct("credit")}
-        onResumePayments={() => setShowPaymentsSetup(true)}
+        onResumePayments={openPaymentsSetup}
         onViewCredit={() => alert("Credit submission")}
-        onViewPayments={() => alert("Payments submission")}
+        onViewPayments={openPaymentsSetup}
         onSignOut={handleSignOut}
         isSigningOut={isSigningOut}
         signOutError={signOutError}
@@ -491,7 +512,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={isSigningIn}
-                  className={`min-h-[44px] w-full rounded-[7px] bg-[#245f49] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#173f32] disabled:opacity-60 ${focusClass}`}
+                  className={`mt-4 min-h-[44px] w-full rounded-[7px] bg-[#245f49] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#173f32] disabled:opacity-60 ${focusClass}`}
                 >
                   {isSigningIn ? "Signing in…" : "Sign in"}
                 </button>
@@ -514,7 +535,7 @@ export default function App() {
               </p>
 
               {resetStatus === "error" && (
-                <p role="alert" className="mt-3 text-sm text-red-700">
+                <p role="alert" className="mt-2 text-sm text-red-700">
                   We couldn’t send your request. Please try again.
                 </p>
               )}
