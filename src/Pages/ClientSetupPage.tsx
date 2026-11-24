@@ -1,11 +1,11 @@
+import { CreditStatusLabel } from "./CreditSetupPage";
+import type { CreditStatus } from "./CreditSetupPage";
 import { PaymentsStatusLabel } from "./PaymentsSetupPage";
 import type { PaymentsStatus } from "./PaymentsSetupPage";
 
-type ProductStatus = "not_started" | "in_progress" | "submitted";
-
 interface ClientSetupPageProps {
   workspaceName: string;
-  creditStatus: ProductStatus;
+  creditStatus: CreditStatus;
   paymentsStatus: PaymentsStatus;
   onStartCredit: () => void;
   onStartPayments: () => void;
@@ -23,15 +23,14 @@ function ProductCard({
   description,
   status,
   onClick,
-  isPayments = false,
 }: {
-  title: string;
   description: string;
-  status: PaymentsStatus;
   onClick: () => void;
-  isPayments?: boolean;
-}) {
-  const paymentAction = status === "not_started" ? "Set up payments" : "View payments";
+} & (
+  | { title: "Payments"; status: PaymentsStatus }
+  | { title: "Credit"; status: CreditStatus }
+)) {
+  const action = status === "not_started" ? "Set up" : "View";
 
   return (
     <section className="rounded-xl border border-[#dce3dc] bg-white p-6">
@@ -39,7 +38,12 @@ function ProductCard({
       <p className="mt-2 text-sm text-[#5f6b63]">{description}</p>
 
       <p className="mt-5 text-sm text-[#5f6b63]">
-        Status: {isPayments ? <PaymentsStatusLabel status={status} /> : status.replace("_", " ")}
+        Status:{" "}
+        {title === "Payments" ? (
+          <PaymentsStatusLabel status={status} />
+        ) : (
+          <CreditStatusLabel status={status} />
+        )}
       </p>
 
       <button
@@ -47,13 +51,7 @@ function ProductCard({
         onClick={onClick}
         className="mt-4 min-h-[44px] rounded-lg bg-[#245f49] px-5 py-2 text-sm font-semibold text-white hover:bg-[#173f32] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245f49]"
       >
-        {isPayments
-          ? paymentAction
-          : status === "not_started"
-            ? "Get started"
-            : status === "in_progress"
-              ? "Continue setup"
-              : "View submission"}
+        {action} {title.toLowerCase()}
       </button>
     </section>
   );
@@ -126,7 +124,6 @@ export default function ClientSetupPage({
         <div className="mt-10 grid gap-6 md:grid-cols-2">
           <ProductCard
             title="Payments"
-            isPayments
             description="Set up your Payments product and manage your application."
             status={paymentsStatus}
             onClick={
