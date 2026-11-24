@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ClientSetupPage from "./Pages/ClientSetupPage";
 import ClientLandingPage from "./Pages/ClientLandingPage";
 
@@ -11,19 +11,82 @@ const focusClass =
 const inputClass = `min-h-[46px] w-full rounded-[7px] border border-[#cbd6cc] bg-white py-2.5 pl-3.5 text-base placeholder:text-[#5f6b63] ${focusClass}`;
 
 const demoWorkspace = {
+  id: "sample-company",
   name: "Sample Company",
 };
+
+const STORAGE_KEY = `weft-demo-client-onboarding-${demoWorkspace.id}`;
+
+function getSavedStatus(product: "credit" | "payments"): ProductStatus {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) || "{}"
+    );
+
+    const status = saved[product];
+
+    return ["not_started", "in_progress", "submitted"].includes(status)
+      ? status
+      : "not_started";
+  } catch {
+    return "not_started";
+  }
+}
 
 export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [landing, setLanding] = useState<Landing | null>(null);
   const [showClientSetup, setShowClientSetup] = useState(false);
+  const [showPaymentsSetup, setShowPaymentsSetup] = useState(false);
   
   const [creditStatus, setCreditStatus] =
-  useState<ProductStatus>("not_started");
+  useState<ProductStatus>(() => getSavedStatus("credit"));
 
 const [paymentsStatus, setPaymentsStatus] =
-  useState<ProductStatus>("in_progress");
+  useState<ProductStatus>(() => getSavedStatus("payments"));
+
+  useEffect(() => {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      credit: creditStatus,
+      payments: paymentsStatus,
+    })
+  );
+}, [creditStatus, paymentsStatus]);
+
+if (landing === "client" && showPaymentsSetup) {
+  return (
+    <main className="min-h-screen bg-[#f4f6f2] p-6 text-[#21342c]">
+      <div className="mx-auto max-w-2xl rounded-xl border border-[#dce3dc] bg-white p-8">
+        <h1 className="text-3xl font-bold">Set up Payments</h1>
+
+        <p className="mt-3 text-[#5f6b63]">
+          Start your Payments onboarding when you are ready.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setShowPaymentsSetup(false)}
+          className="mt-6 mr-3 rounded-lg border border-[#dce3dc] px-5 py-3"
+        >
+          Back
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setPaymentsStatus("in_progress");
+            setShowPaymentsSetup(false);
+          }}
+          className="rounded-lg bg-[#245f49] px-5 py-3 font-semibold text-white"
+        >
+          Start Payments onboarding
+        </button>
+      </div>
+    </main>
+  );
+}
 
   if (landing === "client" && showClientSetup) {
   return (
@@ -32,7 +95,7 @@ const [paymentsStatus, setPaymentsStatus] =
       creditStatus={creditStatus}
       paymentsStatus={paymentsStatus}
       onStartCredit={() => setCreditStatus("in_progress")}
-      onStartPayments={() => setPaymentsStatus("in_progress")}
+      onStartPayments={() => setShowPaymentsSetup(true)}
       onResumeCredit={() => setCreditStatus("in_progress")}
       onResumePayments={() => setPaymentsStatus("in_progress")}
       onViewCredit={() => alert("Credit submission")}
@@ -115,11 +178,16 @@ if (landing === "client") {
               const email = new FormData(event.currentTarget).get("email");
               if (typeof email !== "string") return;
 
-              const domain = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
+              const normalizedEmail = email.toLowerCase().trim();
+              const domain = normalizedEmail.slice(normalizedEmail.lastIndexOf("@") + 1);
 
               setShowPassword(false);
               setShowClientSetup(true);
-setLanding(domain === "weft.cash" ? "team" : "client");
+              const isDemoClient = normalizedEmail === "rea+client-test@weft.cash";
+
+             setLanding(
+             isDemoClient ? "client" : domain === "weft.cash" ? "team" : "client"
+             );
             }}
           >
             <label htmlFor="work-email" className="mb-2 block text-sm font-semibold">
