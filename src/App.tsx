@@ -1,20 +1,53 @@
 import { useState } from "react";
-import PaymentActivationPage from "./Pages/PaymentActivationPage";
+import ClientSetupPage from "./Pages/ClientSetupPage";
+import ClientLandingPage from "./Pages/ClientLandingPage";
 
 type Landing = "team" | "client";
+type ProductStatus = "not_started" | "in_progress" | "submitted";
 
 const focusClass =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245f49]";
 
 const inputClass = `min-h-[46px] w-full rounded-[7px] border border-[#cbd6cc] bg-white py-2.5 pl-3.5 text-base placeholder:text-[#5f6b63] ${focusClass}`;
 
+const demoWorkspace = {
+  name: "Sample Company",
+};
+
 export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [landing, setLanding] = useState<Landing | null>(null);
+  const [showClientSetup, setShowClientSetup] = useState(false);
+  
+  const [creditStatus, setCreditStatus] =
+  useState<ProductStatus>("not_started");
 
-  if (landing === "client") {
-    return <PaymentActivationPage sandbox />;
-  }
+const [paymentsStatus, setPaymentsStatus] =
+  useState<ProductStatus>("in_progress");
+
+  if (landing === "client" && showClientSetup) {
+  return (
+    <ClientSetupPage
+      workspaceName={demoWorkspace.name}
+      creditStatus={creditStatus}
+      paymentsStatus={paymentsStatus}
+      onStartCredit={() => setCreditStatus("in_progress")}
+      onStartPayments={() => setPaymentsStatus("in_progress")}
+      onResumeCredit={() => setCreditStatus("in_progress")}
+      onResumePayments={() => setPaymentsStatus("in_progress")}
+      onViewCredit={() => alert("Credit submission")}
+      onViewPayments={() => alert("Payments submission")}
+    />
+  );
+}
+
+if (landing === "client") {
+  return (
+    <ClientLandingPage
+      onOpenSetup={() => setShowClientSetup(true)}
+    />
+  );
+}
 
   if (landing === "team") {
     return (
@@ -85,7 +118,8 @@ export default function App() {
               const domain = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
 
               setShowPassword(false);
-              setLanding(domain === "weft.cash" ? "team" : "client");
+              setShowClientSetup(true);
+setLanding(domain === "weft.cash" ? "team" : "client");
             }}
           >
             <label htmlFor="work-email" className="mb-2 block text-sm font-semibold">
