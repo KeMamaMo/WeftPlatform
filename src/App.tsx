@@ -1,4 +1,7 @@
 import { useState } from "react";
+import type { FormEvent } from "react";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { auth } from "./firebase";
 import ClientSetupPage from "./Pages/ClientSetupPage";
 import ClientLandingPage from "./Pages/ClientLandingPage";
 
@@ -18,36 +21,79 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [landing, setLanding] = useState<Landing | null>(null);
   const [showClientSetup, setShowClientSetup] = useState(false);
-  
-  const [creditStatus, setCreditStatus] =
-  useState<ProductStatus>("not_started");
+  const [signInError, setSignInError] = useState("");
+  const [signOutError, setSignOutError] = useState("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
-const [paymentsStatus, setPaymentsStatus] =
-  useState<ProductStatus>("in_progress");
+  const [creditStatus, setCreditStatus] =
+    useState<ProductStatus>("not_started");
+  const [paymentsStatus, setPaymentsStatus] =
+    useState<ProductStatus>("in_progress");
+
+  async function handleSignIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isSigningIn) return;
+
+    const fields = new FormData(event.currentTarget);
+    const email = String(fields.get("email") ?? "").trim();
+    const password = String(fields.get("password") ?? "");
+
+    setSignInError("");
+    setIsSigningIn(true);
+
+    try {
+      const { user } = await signInWithEmailAndPassword(auth, email, password);
+      const { claims } = await user.getIdTokenResult();
+      const role = claims.weftRole;
+
+      if (role !== "team" && role !== "client") {
+        await signOut(auth);
+        setSignInError("Your account does not have access to a Weft workspace yet.");
+        return;
+      }
+
+      setShowPassword(false);
+      setShowClientSetup(true);
+      setLanding(role);
+    } catch {
+      setSignInError(
+        "We couldn’t sign you in. Check your email and password and try again."
+      );
+    } finally {
+      setIsSigningIn(false);
+    }
+  }
+
+  async function handleSignOut() {
+    setSignOutError("");
+
+    try {
+      await signOut(auth);
+      setLanding(null);
+    } catch {
+      setSignOutError("We couldn’t sign you out. Please try again.");
+    }
+  }
 
   if (landing === "client" && showClientSetup) {
-  return (
-    <ClientSetupPage
-      workspaceName={demoWorkspace.name}
-      creditStatus={creditStatus}
-      paymentsStatus={paymentsStatus}
-      onStartCredit={() => setCreditStatus("in_progress")}
-      onStartPayments={() => setPaymentsStatus("in_progress")}
-      onResumeCredit={() => setCreditStatus("in_progress")}
-      onResumePayments={() => setPaymentsStatus("in_progress")}
-      onViewCredit={() => alert("Credit submission")}
-      onViewPayments={() => alert("Payments submission")}
-    />
-  );
-}
+    return (
+      <ClientSetupPage
+        workspaceName={demoWorkspace.name}
+        creditStatus={creditStatus}
+        paymentsStatus={paymentsStatus}
+        onStartCredit={() => setCreditStatus("in_progress")}
+        onStartPayments={() => setPaymentsStatus("in_progress")}
+        onResumeCredit={() => setCreditStatus("in_progress")}
+        onResumePayments={() => setPaymentsStatus("in_progress")}
+        onViewCredit={() => alert("Credit submission")}
+        onViewPayments={() => alert("Payments submission")}
+      />
+    );
+  }
 
-if (landing === "client") {
-  return (
-    <ClientLandingPage
-      onOpenSetup={() => setShowClientSetup(true)}
-    />
-  );
-}
+  if (landing === "client") {
+    return <ClientLandingPage onOpenSetup={() => setShowClientSetup(true)} />;
+  }
 
   if (landing === "team") {
     return (
@@ -62,11 +108,17 @@ if (landing === "client") {
 
           <button
             type="button"
-            onClick={() => setLanding(null)}
+            onClick={handleSignOut}
             className={`mt-4 min-h-[44px] rounded text-sm font-semibold text-[#245f49] hover:underline ${focusClass}`}
           >
-            Back to sign in
+            Sign out
           </button>
+
+          {signOutError && (
+            <p role="alert" className="mt-2 text-sm text-red-700">
+              {signOutError}
+            </p>
+          )}
         </div>
       </main>
     );
@@ -106,22 +158,7 @@ if (landing === "client") {
             Access your workspace.
           </p>
 
-          <form
-            className="mt-7"
-            aria-describedby="preview-note"
-            onSubmit={(event) => {
-              event.preventDefault();
-
-              const email = new FormData(event.currentTarget).get("email");
-              if (typeof email !== "string") return;
-
-              const domain = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
-
-              setShowPassword(false);
-              setShowClientSetup(true);
-setLanding(domain === "weft.cash" ? "team" : "client");
-            }}
-          >
+          <form className="mt-7" onSubmit={handleSignIn} aria-busy={isSigningIn}>
             <label htmlFor="work-email" className="mb-2 block text-sm font-semibold">
               Work email
             </label>
@@ -129,7 +166,7 @@ setLanding(domain === "weft.cash" ? "team" : "client");
               id="work-email"
               name="email"
               type="email"
-              autoComplete="off"
+              autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
               placeholder="you@company.com"
@@ -143,8 +180,9 @@ setLanding(domain === "weft.cash" ? "team" : "client");
             <div className="relative">
               <input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
-                autoComplete="off"
+                autoComplete="current-password"
                 placeholder="Enter your password"
                 required
                 className={`${inputClass} pr-12`}
@@ -184,14 +222,17 @@ setLanding(domain === "weft.cash" ? "team" : "client");
 
             <button
               type="submit"
-              className={`min-h-[44px] w-full rounded-[7px] bg-[#245f49] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#173f32] ${focusClass}`}
+              disabled={isSigningIn}
+              className={`min-h-[44px] w-full rounded-[7px] bg-[#245f49] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#173f32] disabled:opacity-60 ${focusClass}`}
             >
-              Sign in
+              {isSigningIn ? "Signing in…" : "Sign in"}
             </button>
 
-            <p id="preview-note" className="mt-3 text-center text-xs text-[#5f6b63]">
-              Demo preview. Use sample details.
-            </p>
+            {signInError && (
+              <p role="alert" className="mt-3 text-sm text-red-700">
+                {signInError}
+              </p>
+            )}
           </form>
         </section>
       </main>
