@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { FirebaseError } from "firebase/app";
+import { onSnapshot } from "firebase/firestore";
 import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { auth } from "./firebase";
+import { auth, paymentsCaseRef } from "./firebase";
 import ClientSetupPage from "./Pages/ClientSetupPage";
 import ClientLandingPage from "./Pages/ClientLandingPage";
 import PaymentsSetupPage from "./Pages/PaymentsSetupPage";
@@ -199,16 +200,41 @@ export default function App() {
     }
   }, [clientOnboarding]);
 
-  function startProduct(product: Product) {
-    setClientOnboarding((current) => {
-      if (!current || current.statuses[product] !== "not_started") return current;
+  const clientUid = clientOnboarding?.uid;
 
-      return {
-        ...current,
-        statuses: { ...current.statuses, [product]: "in_progress" },
-      };
-    });
-  }
+  useEffect(() => {
+    if (!clientUid) return;
+
+    return onSnapshot(
+      paymentsCaseRef(clientUid),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (
+          !snapshot.exists() ||
+          snapshot.metadata.fromCache ||
+          snapshot.metadata.hasPendingWrites
+        ) return;
+
+        const payments = snapshot.get("status") === "submitted"
+          ? "submitted"
+          : "in_progress";
+
+        setClientOnboarding((current) => {
+          if (
+            !current ||
+            current.uid !== clientUid ||
+            current.statuses.payments === payments ||
+            current.statuses.payments === "active"
+          ) return current;
+
+          return { ...current, statuses: { ...current.statuses, payments } };
+        });
+      },
+      () => {
+        // The Payments flow shows its own Firebase connection errors.
+      }
+    );
+  }, [clientUid]);
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -303,15 +329,14 @@ export default function App() {
     (clientLocation === paymentsSetupHref || clientLocation === paymentsConsentHref)
   ) {
     const status = clientOnboarding.statuses.payments;
-    const canContinue = status === "not_started" || status === "in_progress";
 
-    if (clientLocation === paymentsConsentHref && canContinue) {
+    if (clientLocation === paymentsConsentHref && status !== "active") {
       return (
         <PaymentsConsentPreviewPage
+          key={clientOnboarding.uid}
+          uid={clientOnboarding.uid}
           workspace={demoWorkspace}
           paymentsSetupHref={paymentsSetupHref}
-          hasStarted={status === "in_progress"}
-          onStart={() => startProduct("payments")}
           onSignOut={handleSignOut}
           isSigningOut={isSigningOut}
           signOutError={signOutError}
