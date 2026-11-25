@@ -14,7 +14,8 @@ import ClientLandingPage from "./Pages/ClientLandingPage";
 import PaymentsSetupPage from "./Pages/PaymentsSetupPage";
 import type { PaymentsStatus, PaymentsWorkspace } from "./Pages/PaymentsSetupPage";
 import PaymentsConsentPreviewPage from "./Pages/PaymentsConsentPreviewPage";
-import CreditSetupPage, { CreditOnboardingPlaceholder } from "./Pages/CreditSetupPage";
+import CreditSetupPage from "./Pages/CreditSetupPage";
+import CreditOnboardingPage from "./Pages/CreditOnboardingPage";
 import type { CreditStatus } from "./Pages/CreditSetupPage";
 
 type PasswordResetStatus = "idle" | "sending" | "sent" | "error";
@@ -375,7 +376,8 @@ export default function App() {
 
     if (clientLocation === creditOnboardingHref && status !== "submitted") {
       return (
-        <CreditOnboardingPlaceholder
+        <CreditOnboardingPage
+          key={clientOnboarding.uid}
           {...creditWorkspaceProps}
           creditSetupHref={creditSetupHref}
         />
